@@ -1,0 +1,56 @@
+Plan:
+
+Datenvorbereitung:
+Skripte:
+
+1 Daten downloaden und ablegen
+2 Daten kontrollieren und mergen
+3 Daten für Shinyapp vorbereiten
+4 Shiny app
+
+Shiny APP:
+
+	Titel
+	1-2 Sätze Einführung
+
+Anfang: Liste 10 häufigste vorkommen anzeigen
+
+	App nutzen
+
+	1. Medikament auswählen
+		-> Grafiken und Statistiken werden angepasst (automatisch)
+	
+	2. Wenn nötig oder gewollt kann ein Filter benutzt werden -> Filter Auswahl (Save) dann wird es angewendet
+	
+	Filter:
+		Altersbereich
+		Geschlecht
+		Medikamentenrolle
+		
+		-> Histogramm zur Verteilung der Therapielänge, Top-Indikationen sowie Top-Reaktionen
+	
+
+	Statistiken
+		Anzahl Meldungen zum Medikament nach Quartal und Rolle (ROLE_COD-Werte (PS, SS, C, I))
+		Neben dem häufigsten ROLE_COD des Medikaments auch die Substanzen, die in den übrigen drei
+		ROLE_COD-Kategorien am häufigsten gemeinsam auftreten.
+		Histogramm zur Verteilung der Therapielänge
+		Top 10 (oder top 75%) Indikationen
+		
+		2 Zusätzliche Statistiken
+
+		zum Beispiel Grafiken, Tabellen, Listen -> Diese sollen zu der Basis noch "interessante" Aspekte aufweisen können.
+		
+
+Grundplanung:
+
+• Diskutieren Sie in Ihrer Gruppe, welche Jahre (mindestens 2 Jahre) und welche Medikamente (alle
+die in den zwei Jahren vorkommen sollte möglich sein) berücksicht werden sollen. Beachten Sie bei
+der Einschränkung der Medikamente, dass auch alle Medikamente berücksichtigt werden müssen
+die in mindestens einer der dazugehörigen Sequenzen vorkommen.
+• Bestimmen Sie die 2 weiteren Statistiken, die Sie dem Nutzer anbieten wollen.
+• Bestimmen Sie eine Arbeitsaufteilung.
+• Suchen Sie für die selektive Eingabe des Medikaments, der Medikamentensequenzen, des Alters und
+des Geschlechts nach passenden Shiny Input Widgets.
+• Skizzieren Sie von Hand, wie die App aussehen soll.
+• Stellen Sie gegen Ende des Morgens dem Dozenten Ihren Plan mündlich vor (ca. 5 min).
