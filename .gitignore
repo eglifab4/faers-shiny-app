@@ -1,0 +1,29 @@
+# ============================================
+# FAERS-Daten: NICHT ins Git-Repo hochladen!
+# ============================================
+# Rohdaten (ZIP-Dateien, viele GB)
+Organisation_Rohdaten/
+
+# Aufbereitete Daten (RDS-Dateien, ebenfalls gross)
+Organisation_processed_data/
+
+# Aber: Platzhalter-Datei behalten, damit der leere Ordner
+# in Git existiert (falls du .gitkeep-Dateien anlegst)
+!Organisation_Rohdaten/.gitkeep
+!Organisation_processed_data/.gitkeep
+
+# ============================================
+# RStudio / R typische Ignore-Eintraege
+# ============================================
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj.user
+
+# ============================================
+# Betriebssystem-Muell
+# ============================================
+.DS_Store
+Thumbs.db
+desktop.ini
