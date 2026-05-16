@@ -7,10 +7,14 @@ Organisation_Rohdaten/
 # Aufbereitete Daten (RDS-Dateien, ebenfalls gross)
 Organisation_processed_data/
 
+# Shiny-App Daten (7 RDS-Dateien, ca. 470 MB)
+app_data/
+
 # Aber: Platzhalter-Datei behalten, damit der leere Ordner
 # in Git existiert (falls du .gitkeep-Dateien anlegst)
 !Organisation_Rohdaten/.gitkeep
 !Organisation_processed_data/.gitkeep
+!app_data/.gitkeep
 
 # ============================================
 # RStudio / R typische Ignore-Eintraege
