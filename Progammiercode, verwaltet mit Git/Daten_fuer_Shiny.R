@@ -18,6 +18,7 @@
 
 library(data.table)
 library(here)
+library(fst)   # schnelles Speicherformat (~10-20x schneller als RDS)
 
 find_faers_file <- function(q_folder, entity) {
 
@@ -154,8 +155,8 @@ for (entity in entitaeten) {
 
   if (is.null(dt)) next
 
-  out_pfad <- file.path(app_data_ordner, paste0(entity, ".rds"))
-  saveRDS(dt, out_pfad)
+  out_pfad <- file.path(app_data_ordner, paste0(entity, ".fst"))
+  write_fst(dt, out_pfad, compress = 50)
 
   message("  -> Gespeichert: ", basename(out_pfad),
           " (", round(file.info(out_pfad)$size / 1024^2, 1), " MB)")
@@ -171,7 +172,7 @@ for (entity in entitaeten) {
 message("\n========== FERTIG ==========")
 message("App-Daten gespeichert in: ", app_data_ordner)
 
-dateien <- list.files(app_data_ordner, pattern = "\\.rds$", full.names = TRUE)
+dateien <- list.files(app_data_ordner, pattern = "\\.fst$", full.names = TRUE)
 gesamt_mb <- round(sum(file.info(dateien)$size) / 1024^2, 1)
 
 message("Anzahl Dateien:  ", length(dateien))
