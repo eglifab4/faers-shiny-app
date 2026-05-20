@@ -19,10 +19,32 @@
 library(data.table)
 library(here)
 
+find_faers_file <- function(q_folder, entity) {
+
+  pattern <- paste0("^", entity, ".*\\.txt$")
+
+  files <- list.files(
+    q_folder,
+    pattern = pattern,
+    recursive = TRUE,
+    full.names = TRUE,
+    ignore.case = TRUE
+  )
+
+  if (length(files) == 0) return(NULL)
+
+  ascii_files <- files[grepl("ascii", files, ignore.case = TRUE)]
+
+  if (length(ascii_files) > 0) return(ascii_files[1])
+
+  files[1]
+}
+
+
 # -------------------------------------------------------------
 # 1) Pfade und Konfiguration
 # -------------------------------------------------------------
-processed_ordner <- here("Organisation_processed_data")
+raw_ordner <- here("Organisation_Rohdaten", "faers_data")
 app_data_ordner  <- here("app_data")
 
 dir.create(app_data_ordner, recursive = TRUE, showWarnings = FALSE)
@@ -36,7 +58,7 @@ entitaeten <- c("DEMO", "DRUG", "INDI", "OUTC", "REAC", "RPSR", "THER")
 # -------------------------------------------------------------
 # 2) Welche Quartale verarbeiten?
 # -------------------------------------------------------------
-alle_q_ordner <- list.dirs(processed_ordner,
+alle_q_ordner <- list.dirs(raw_ordner,
                            recursive = FALSE,
                            full.names = TRUE)
 
@@ -56,36 +78,35 @@ message("  Letztes: ", basename(letzte_q_ordner[length(letzte_q_ordner)]))
 read_entity_quartal <- function(entity, q_ordner) {
 
   q_name <- basename(q_ordner)
-  file_pfad <- file.path(q_ordner, paste0(entity, ".txt"))
 
-  if (!file.exists(file_pfad)) {
+  file_pfad <- find_faers_file(q_ordner, entity)
+
+  if (is.null(file_pfad) || !file.exists(file_pfad)) {
     return(NULL)
   }
 
-  # fread() liest viel schneller als read.table
-  # colClasses = "character" -> alle Spalten als Text (vermeidet Typkonflikte)
   dt <- tryCatch({
-    fread(file_pfad,
-          sep = "$",
-          header = TRUE,
-          fill = TRUE,
-          quote = "",
-          na.strings = c("", "NA", "."),
-          colClasses = "character",
-          encoding = "Latin-1",
-          showProgress = FALSE)
+    fread(
+      file_pfad,
+      sep = "$",
+      header = TRUE,
+      fill = TRUE,
+      quote = "",
+      na.strings = c("", "NA", "."),
+      colClasses = "character",
+      encoding = "Latin-1",
+      showProgress = FALSE
+    )
   }, error = function(e) {
-    message("    [FEHLER] ", entity, " in ", q_name, ": ", conditionMessage(e))
+    message("FEHLER: ", entity, " in ", q_name)
     return(NULL)
   })
 
   if (is.null(dt) || nrow(dt) == 0) return(NULL)
 
-  # Spaltennamen saeubern: BOM-Reste entfernen, lowercase
   setnames(dt, names(dt),
            tolower(sub("^[^A-Za-z0-9_]+", "", names(dt))))
 
-  # Quartal- und Jahres-Spalten hinzufuegen
   dt[, quartal := q_name]
   dt[, jahr := substr(q_name, 1, 4)]
 
