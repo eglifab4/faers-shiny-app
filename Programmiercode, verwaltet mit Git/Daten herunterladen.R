@@ -24,10 +24,12 @@ extract_year <- function(x) {
   as.integer(str_extract(x, "20[0-9]{2}"))
 }
 
-# 🔥 NUR AB 2016 (keine Obergrenze)
+# Nur ab 2012 (Aufgabenstellung Praktikum 3, Woche 1)
+# Ab Q3 2014 hat sich die Datenstruktur geaendert -
+# wird in Daten_fuer_Shiny.R durch fill = TRUE im rbindlist abgefangen
 zip_links <- zip_links[
   !is.na(extract_year(zip_links)) &
-    extract_year(zip_links) >= 2016
+    extract_year(zip_links) >= 2012
 ]
 
 zip_links <- unique(zip_links)
