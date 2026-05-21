@@ -1,17 +1,39 @@
+# FAERS-Daten Downloader
+
+# Dieses Skript:
+# 1. Liest die FDA-FAERS-Webseite ein
+# 2. Extrahiert alle verfügbaren ZIP-Dateien
+# 3. Filtert nur ASCII-FAERS-Dateien ab 2012
+# 4. Lädt fehlende Quartale herunter
+# 5. Entpackt die Daten automatisch
+
+# Datenquelle:
+# https://fis.fda.gov/extensions/FPD-QDE-FAERS/FPD-QDE-FAERS.html
+
+# Benötigte Pakete:
+# - rvest   -> Webscraping
+# - stringr -> String-Verarbeitung
+
+
 library(rvest)
 library(stringr)
 
+# URL der offiziellen FDA-FAERS-Seite
 url <- "https://fis.fda.gov/extensions/FPD-QDE-FAERS/FPD-QDE-FAERS.html"
 
+# HTML-Seite laden
 page <- read_html(url)
 
+# Alle href-Links aus der Webseite extrahieren
 links <- page |>
   html_elements("a") |>
   html_attr("href")
 
+
+# NA-Werte entfernen
 links <- links[!is.na(links)]
 
-# ASCII ZIP Dateien
+# Nur ASCII-FAERS-ZIP-Dateien auswählen
 zip_links <- links[
   str_detect(
     links,
@@ -19,7 +41,9 @@ zip_links <- links[
   )
 ]
 
-# Jahr aus Filename extrahieren
+# Funktion:
+# Extrahiert das Jahr aus dem Dateinamen
+
 extract_year <- function(x) {
   as.integer(str_extract(x, "20[0-9]{2}"))
 }
@@ -34,27 +58,35 @@ zip_links <- zip_links[
 
 zip_links <- unique(zip_links)
 
-# Zielordner
+# Zielordner für Downloads und entpackte Daten
 base_dir <- "Organisation_Rohdaten/faers_data"
 
+
+# Ordner erstellen, falls nicht vorhanden
 dir.create(
   base_dir,
   recursive = TRUE,
   showWarnings = FALSE
 )
 
+
+# Download-Timeout erhöhen
+# Große ZIP-Dateien können mehrere Minuten dauern.
 options(timeout = 600)
 
-# Quartal ID
+# Extrahiert die Quartals-ID aus dem Dateinamen
+
 extract_id <- function(x) {
   str_extract(tolower(x), "20[0-9]{2}q[1-4]")
 }
+
 
 existing_ids <- extract_id(
   list.files(base_dir)
 )
 
-# Download + unzip
+
+# Download und Entpacken aller fehlenden Dateien
 for (link in zip_links) {
   
   # vollständige URL
@@ -68,14 +100,16 @@ for (link in zip_links) {
   
   id <- extract_id(file_name)
   
-  # skip falls schon vorhanden
+  # Überspringen, falls Quartal bereits existiert
   if (!is.na(id) && id %in% existing_ids) {
     message("Bereits vorhanden: ", id)
     next
   }
-  
+
+  # Lokaler Speicherpfad der ZIP-Datei
   zip_path <- file.path(base_dir, file_name)
   
+  # Zielordner zum Entpacken
   out_dir <- file.path(
     base_dir,
     str_replace(file_name, "\\.zip$", "")
@@ -83,7 +117,15 @@ for (link in zip_links) {
   
   message("⬇ Download: ", file_name)
   
+  # Falls Download oder Entpacken fehlschlägt,
+  # werden unvollständige Dateien gelöscht.
   tryCatch({
+    
+    # ZIP-Datei herunterladen
+    # mode = "wb":
+    # notwendig für Binärdateien wie ZIP
+    # method = "libcurl":
+    # stabilerer Download
     
     download.file(
       file_url,
@@ -92,15 +134,20 @@ for (link in zip_links) {
       method = "libcurl"
     )
     
+    # Zielordner erstellen
     dir.create(out_dir, showWarnings = FALSE)
     
+    # ZIP-Datei entpacken
     unzip(zip_path, exdir = out_dir)
     
   }, error = function(e) {
     
+    # Fehlermeldung ausgeben
     message("Fehler bei: ", file_name)
     
+    # Beschädigte ZIP-Datei löschen
     if (file.exists(zip_path)) file.remove(zip_path)
+    # Unvollständigen Ordner löschen
     if (dir.exists(out_dir)) unlink(out_dir, recursive = TRUE)
   })
 }
