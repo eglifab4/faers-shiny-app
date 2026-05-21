@@ -1,17 +1,6 @@
-# =============================================================
-# app.R - FAERS Adverse Event Explorer (Shiny App)
-# -------------------------------------------------------------
+# app1.R - FAERS Adverse Event Explorer (Shiny App)
 # Praktikum 3 - PM2 ZHAW 2026
-#
-# Voraussetzung:
-#   In app_data/ liegen DEMO.fst, DRUG.fst, INDI.fst,
-#   OUTC.fst, REAC.fst, RPSR.fst, THER.fst (durch
-#   Daten_fuer_Shiny.R erzeugt).
-#
-# Starten:
-#   In RStudio: oben rechts "Run App" klicken
-#   Oder Console:  shiny::runApp("app1.R")
-# =============================================================
+# Voraussetzung: app_data/ enthaelt die 7 .fst-Dateien aus Daten_fuer_Shiny.R
 
 library(shiny)
 library(data.table)
@@ -20,13 +9,9 @@ library(DT)
 library(here)
 library(fst)
 
-# =============================================================
-# 1) DATEN LADEN (einmal beim App-Start)
-# -------------------------------------------------------------
-# Wir nutzen das fst-Format statt RDS, weil es ~10-20x schneller
-# lädt. Das entspricht auch der Empfehlung in der Aufgabenstellung
-# (Praktikum 3, Aufgabe 1c: feather / parquet / fst).
-# =============================================================
+
+# Daten laden (einmal beim App-Start)
+# .fst laedt deutlich schneller als RDS (Aufgabe 1c)
 message("App startet... Daten werden geladen...")
 t_start <- Sys.time()
 
@@ -49,30 +34,18 @@ message("Daten geladen: ",
         format(nrow(drug), big.mark = "'"), " DRUG, ",
         format(nrow(reac), big.mark = "'"), " REAC")
 
-# =============================================================
-# 2) VORBERECHNUNGEN
-# =============================================================
 
-# Top-200 Medikamente für schnelles Auswahlmenü
+# Vorberechnungen: Top-Medikamente fuer das Auswahlmenue
 top_drugs <- drug[!is.na(drugname) & drugname != "",
                   .N, by = drugname][order(-N)][1:200]
 
-# Top-10 für Startanzeige
 top10_drugs <- top_drugs[1:10]
 
-# =============================================================
-# 3) HELFER-FUNKTIONEN
-# =============================================================
 
-# -------------------------------------------------------------
-# Datum-Parse-Funktion
-# Unterstützt das FAERS-Format YYYYMMDD (z.B. "20230415")
-# Gibt NA zurück bei ungültigem oder unvollständigem Datum
-# -------------------------------------------------------------
+# Helfer: Datum im FAERS-Format YYYYMMDD parsen
 parse_faers_date <- function(x) {
   x <- trimws(as.character(x))
   d <- rep(as.Date(NA), length(x))
-  # Nur 8-stellige rein numerische Strings verarbeiten (= YYYYMMDD)
   valid <- !is.na(x) & nchar(x) == 8 & grepl("^[0-9]{8}$", x)
   if (any(valid)) {
     d[valid] <- suppressWarnings(as.Date(x[valid], format = "%Y%m%d"))
@@ -80,36 +53,31 @@ parse_faers_date <- function(x) {
   d
 }
 
-# -------------------------------------------------------------
-# Hauptfunktion: für ein Medikament alle Daten zusammenstellen
-# (entspricht Aufgabe 2d aus dem PDF)
-# -------------------------------------------------------------
+
+# Hauptfunktion: alle Tabellen fuer ein Medikament zusammenstellen (Aufgabe 1d)
 get_drug_data <- function(drug_input,
                           alter_min = 0, alter_max = 120,
                           geschlecht = c("M", "F", "UNK"),
                           role_cods  = c("PS", "SS", "C", "I", "")) {
 
-  # Schritt 1: Alle Drug-Einträge mit dem gewählten Medikament
+  # 1) Drug-Eintraege mit dem gewaehlten Medikament
   drug_target <- drug[grepl(drug_input, drugname, ignore.case = TRUE)]
 
-  # Falls Filter ROLE_COD: nur Fälle wo das Medikament diese Rolle hat
   if (length(role_cods) > 0 && length(role_cods) < 5) {
     drug_target <- drug_target[role_cod %in% role_cods]
   }
 
-  # primaryids dieser Fälle
   ids <- unique(drug_target$primaryid)
 
   if (length(ids) == 0) {
     return(NULL)
   }
 
-  # Schritt 2: Demographic der gefilterten Fälle
+  # 2) Demographics dieser Faelle, gefiltert nach Geschlecht und Alter
   demo_seq <- demo[primaryid %in% ids]
 
-  # Filter: Geschlecht
   if (!is.null(geschlecht) && length(geschlecht) > 0) {
-    # Spalte heisst entweder "sex" oder "gndr_cod" (je nach Quartal)
+    # Spalte heisst je nach Quartal "sex" oder "gndr_cod"
     if ("sex" %in% names(demo_seq)) {
       sex_col <- "sex"
     } else if ("gndr_cod" %in% names(demo_seq)) {
@@ -122,35 +90,23 @@ get_drug_data <- function(drug_input,
     }
   }
 
-  # Filter: Alter (in Jahren)
   if (!is.null(alter_min) && !is.null(alter_max)) {
-    # age ist character, wir konvertieren zu numeric
     demo_seq[, age_num := suppressWarnings(as.numeric(age))]
-    # Behalte: passende Altersrange ODER fehlendes Alter (NA)
     demo_seq <- demo_seq[is.na(age_num) | (age_num >= alter_min & age_num <= alter_max)]
   }
 
-  # Update ids nach Demo-Filtern
   ids_filtered <- unique(demo_seq$primaryid)
 
-  # Schritt 3: Erweiterung auf vollständige Sequenzen
-  # (alle Drug-Einträge der gefilterten primaryids - auch andere Medikamente!)
+  # 3) Erweiterung auf vollstaendige Sequenzen (auch andere Medikamente desselben Falls)
   drug_full_seq <- drug[primaryid %in% ids_filtered]
 
   # Outcome: nur letzter Eintrag pro primaryid
   outc_seq  <- outc[primaryid %in% ids_filtered]
   outc_last <- outc_seq[, .SD[.N], by = primaryid]
 
-  # Therapy
   ther_seq <- ther[primaryid %in% ids_filtered]
-
-  # Indication
   indi_seq <- indi[primaryid %in% ids_filtered]
-
-  # Reactions
   reac_seq <- reac[primaryid %in% ids_filtered]
-
-  # Report Sources
   rpsr_seq <- rpsr[primaryid %in% ids_filtered]
 
   list(
@@ -167,10 +123,8 @@ get_drug_data <- function(drug_input,
   )
 }
 
-# =============================================================
-# 4) USER INTERFACE
-# =============================================================
 
+# User Interface
 ui <- fluidPage(
 
   titlePanel("FAERS Adverse Event Explorer"),
@@ -185,13 +139,12 @@ ui <- fluidPage(
 
   sidebarLayout(
 
-    # ============== SIDEBAR ==============
     sidebarPanel(width = 3,
 
       h4("1. Medikament"),
       selectizeInput("drug_choice",
                      "Medikament auswählen:",
-                     choices = NULL,  # wird im Server gefüllt
+                     choices = NULL,
                      selected = NULL,
                      options = list(placeholder = "Tippen, um zu suchen...")),
 
@@ -232,12 +185,11 @@ ui <- fluidPage(
           textOutput("status_text"))
     ),
 
-    # ============== MAIN PANEL ==============
     mainPanel(width = 9,
 
       tabsetPanel(id = "tabs",
 
-        # ------------------ TAB 1: ÜBERSICHT ------------------
+        # Tab 1: Uebersicht
         tabPanel("Übersicht",
                  br(),
                  h3("Top 10 häufigste Medikamente"),
@@ -248,7 +200,7 @@ ui <- fluidPage(
                  verbatimTextOutput("current_drug_info")
         ),
 
-        # ------------------ TAB 2: PFLICHT-STATISTIKEN ------------------
+        # Tab 2: Pflicht-Statistiken
         tabPanel("Statistiken",
                  br(),
                  conditionalPanel(
@@ -287,7 +239,7 @@ ui <- fluidPage(
                  )
         ),
 
-        # ------------------ TAB 3: ZUSATZ-STATISTIKEN ------------------
+        # Tab 3: Zusatz-Statistiken
         tabPanel("Zusatz-Statistiken",
                  br(),
                  conditionalPanel(
@@ -323,7 +275,7 @@ ui <- fluidPage(
                  )
         ),
 
-        # ------------------ TAB 4: ANLEITUNG ------------------
+        # Tab 4: Anleitung
         tabPanel("Anleitung",
                  br(),
                  h3("So benutzt du diese App"),
@@ -384,18 +336,15 @@ ui <- fluidPage(
   )
 )
 
-# =============================================================
-# 5) SERVER
-# =============================================================
 
+# Server
 server <- function(input, output, session) {
 
-  # Top-200 Medikamente in Auswahl-Box laden (mit "tippen" suchbar)
   updateSelectizeInput(session, "drug_choice",
                        choices = top_drugs$drugname,
                        server = TRUE)
 
-  # Deutsche Sprache für DataTables (Show entries / Search etc.)
+  # Deutsche Sprache fuer DataTables
   dt_lang_de <- list(
     info         = "Zeige _START_ bis _END_ von _TOTAL_ Einträgen",
     lengthMenu   = "Zeige _MENU_ Einträge",
@@ -408,7 +357,7 @@ server <- function(input, output, session) {
     infoFiltered = "(gefiltert aus _MAX_ Einträgen)"
   )
 
-  # ----- Top-10 Tabelle -----
+  # Top-10 Tabelle (mit Klick-Auswahl)
   output$top10_table <- DT::renderDataTable({
     DT::datatable(
       top10_drugs,
@@ -420,7 +369,6 @@ server <- function(input, output, session) {
     )
   })
 
-  # Klick in Top-10 -> Drug auswählen
   observeEvent(input$top10_table_rows_selected, {
     row <- input$top10_table_rows_selected
     if (length(row) > 0) {
@@ -429,14 +377,13 @@ server <- function(input, output, session) {
     }
   })
 
-  # ----- Aktuelle Drug-Info -----
   output$current_drug_info <- renderText({
     req(input$drug_choice)
     paste0(input$drug_choice,
            "\n\nKlicke links auf 'Filter anwenden', um die Statistiken zu berechnen.")
   })
 
-  # ----- HAUPT-REACTIVE: nur bei Klick auf "Filter anwenden" -----
+  # Hauptreactive: laeuft nur beim Klick auf "Filter anwenden"
   filtered_data <- eventReactive(input$apply_filter, {
 
     req(input$drug_choice)
@@ -452,7 +399,6 @@ server <- function(input, output, session) {
     )
   })
 
-  # ----- Status-Indikator -----
   output$status_text <- renderText({
     fd <- filtered_data()
     if (is.null(fd)) {
@@ -462,16 +408,14 @@ server <- function(input, output, session) {
     }
   })
 
-  # has_data für conditionalPanel
   output$has_data <- reactive({
     fd <- filtered_data()
     !is.null(fd) && fd$n_faelle > 0
   })
   outputOptions(output, "has_data", suspendWhenHidden = FALSE)
 
-  # =============================================
-  # PFLICHT-STATISTIKEN
-  # =============================================
+
+  # Pflicht-Statistiken (1-6)
 
   # 1) Meldungen pro Quartal nach ROLE_COD
   output$plot_quartal_role <- renderPlot({
@@ -489,19 +433,18 @@ server <- function(input, output, session) {
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
   })
 
-  # 2) Top mit-vorkommende Substanzen (andere ROLE_COD)
+  # 2) Top mit-vorkommende Substanzen
   output$table_cosubstanzen <- DT::renderDataTable({
     fd <- filtered_data()
     req(fd)
 
-    # Andere Drugs in den Sequenzen (nicht das ausgewählte selbst)
+    # Andere Medikamente in den Sequenzen (nicht das ausgewaehlte selbst)
     co_drugs <- fd$drug_full[
       !grepl(input$drug_choice, drugname, ignore.case = TRUE)
     ]
     co_drugs <- co_drugs[!is.na(drugname) & drugname != ""]
     co_drugs <- co_drugs[!is.na(role_cod) & role_cod != ""]
 
-    # Pro ROLE_COD die häufigsten zählen
     co_summary <- co_drugs[, .N, by = .(role_cod, drugname)][order(role_cod, -N)]
     co_summary <- co_summary[, head(.SD, 10), by = role_cod]
 
@@ -513,7 +456,7 @@ server <- function(input, output, session) {
     )
   })
 
-  # 3) Histogramm Therapielänge
+  # 3) Histogramm Therapielaenge
   output$plot_therapie_dauer <- renderPlot({
     fd <- filtered_data()
     req(fd)
@@ -583,7 +526,7 @@ server <- function(input, output, session) {
       theme_minimal(base_size = 13)
   })
 
-  # 6) Outcomes (nur abgeschlossene Therapien)
+  # 6) Outcomes (nur Faelle mit abgeschlossener Therapie, d.h. mit end_dt)
   output$plot_outcomes <- renderPlot({
     fd <- filtered_data()
     req(fd)
@@ -594,8 +537,6 @@ server <- function(input, output, session) {
                theme_void())
     }
 
-    # Nur Fälle mit abgeschlossener Therapie
-    # (vereinfacht: end_dt vorhanden)
     abgeschlossen_ids <- fd$ther[!is.na(end_dt) & end_dt != "",
                                  unique(primaryid)]
 
@@ -608,7 +549,6 @@ server <- function(input, output, session) {
                theme_void())
     }
 
-    # Lesbare Labels für Outcome-Codes
     outc_labels <- c(
       "DE" = "Tod",
       "LT" = "Lebensbedrohlich",
@@ -630,13 +570,12 @@ server <- function(input, output, session) {
       theme_minimal(base_size = 13)
   })
 
-  # =============================================
-  # ZUSATZ-STATISTIKEN
-  # =============================================
+
+  # Zusatz-Statistiken (7-8)
 
   # 7) Zeit zwischen Therapiebeginn (start_dt) und Ereignisdatum (event_dt)
-  #    -> nur für die Therapie, die zum gewählten Medikament gehört
-  #    Join: DRUG.drug_seq  <->  THER.dsg_drug_seq  (innerhalb derselben primaryid)
+  # Join ueber DRUG.drug_seq = THER.dsg_drug_seq, damit wirklich die Therapie
+  # des ausgewaehlten Medikaments genommen wird (nicht eine andere im Fall)
   output$plot_zeit_diff <- renderPlot({
     fd <- filtered_data()
     req(fd)
@@ -647,7 +586,6 @@ server <- function(input, output, session) {
                theme_void())
     }
 
-    # Schritt 1: drug_seq des ausgewählten Medikaments pro Fall holen
     drug_keys <- fd$drug_target[!is.na(drug_seq) & drug_seq != "",
                                 .(primaryid, drug_seq)]
 
@@ -657,8 +595,6 @@ server <- function(input, output, session) {
                theme_void())
     }
 
-    # Schritt 2: nur THER-Einträge nehmen, die zum gewählten Medikament gehören
-    # (Verknüpfung über primaryid + dsg_drug_seq = drug_seq)
     ther_matched <- merge(
       fd$ther[!is.na(start_dt) & start_dt != "",
               .(primaryid, dsg_drug_seq, start_dt)],
@@ -673,16 +609,13 @@ server <- function(input, output, session) {
                theme_void())
     }
 
-    # Falls mehrere Therapien zum selben Medikament im gleichen Fall:
-    # frühesten Start nehmen
+    # Bei mehreren Therapien zum selben Medikament: fruehesten Start nehmen
     ther_first <- ther_matched[, .(start_dt = min(start_dt, na.rm = TRUE)),
                                by = primaryid]
 
-    # Schritt 3: Ereignisdatum aus DEMO holen
     demo_event <- fd$demo[!is.na(event_dt) & event_dt != "",
                            .(primaryid, event_dt)]
 
-    # Schritt 4: zusammenführen
     merged <- merge(demo_event, ther_first, by = "primaryid")
 
     if (nrow(merged) == 0) {
@@ -691,7 +624,6 @@ server <- function(input, output, session) {
                theme_void())
     }
 
-    # Schritt 5: Datum parsen (Format YYYYMMDD)
     merged[, event_date := parse_faers_date(event_dt)]
     merged[, start_date := parse_faers_date(start_dt)]
     merged[, diff_tage  := as.numeric(event_date - start_date)]
@@ -699,8 +631,7 @@ server <- function(input, output, session) {
     n_alle    <- nrow(merged[!is.na(diff_tage)])
     n_negativ <- nrow(merged[!is.na(diff_tage) & diff_tage < 0])
 
-    # Nur positive Werte: Ereignis NACH oder AM Therapiebeginn
-    # bis maximal 10 Jahre (3650 Tage) - längere Werte sind meist Datenfehler
+    # Nur positive Differenzen, max. 10 Jahre - alles andere sind meist Eingabefehler
     plot_dt <- merged[!is.na(diff_tage) & diff_tage >= 0 & diff_tage <= 3650]
 
     if (nrow(plot_dt) == 0) {
@@ -745,7 +676,7 @@ server <- function(input, output, session) {
 
     demo_dt <- copy(fd$demo)
 
-    # Geschlechtsspalte: heisst je nach Quartal "sex" oder "gndr_cod"
+    # Spalte heisst je nach Quartal "sex" oder "gndr_cod"
     if ("sex" %in% names(demo_dt)) {
       demo_dt[, geschlecht := sex]
     } else if ("gndr_cod" %in% names(demo_dt)) {
@@ -756,10 +687,8 @@ server <- function(input, output, session) {
                theme_void())
     }
 
-    # Alter parsen (ist als character gespeichert)
     demo_dt[, alter := suppressWarnings(as.numeric(age))]
 
-    # Filter: nur M/F, gültiges Alter 0-120
     plot_dt <- demo_dt[geschlecht %in% c("M", "F") &
                          !is.na(alter) & alter > 0 & alter <= 120]
 
@@ -769,10 +698,8 @@ server <- function(input, output, session) {
                theme_void())
     }
 
-    # Lesbare Labels
     plot_dt[, geschlecht_label := ifelse(geschlecht == "M", "Männlich", "Weiblich")]
 
-    # Kennzahlen für den Untertitel
     n_m      <- sum(plot_dt$geschlecht == "M")
     n_f      <- sum(plot_dt$geschlecht == "F")
     median_m <- round(median(plot_dt$alter[plot_dt$geschlecht == "M"]), 1)
@@ -799,8 +726,6 @@ server <- function(input, output, session) {
 
 }
 
-# =============================================================
-# 6) APP STARTEN
-# =============================================================
 
+# App starten
 shinyApp(ui = ui, server = server)

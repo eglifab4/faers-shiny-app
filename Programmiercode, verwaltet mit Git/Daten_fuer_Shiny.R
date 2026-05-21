@@ -1,24 +1,9 @@
-# =============================================================
 # Daten_fuer_Shiny.R
-# -------------------------------------------------------------
-# Bereitet die Daten fuer die Shiny App vor.
-# Liest pro Entitaet (DEMO, DRUG, INDI, OUTC, REAC, RPSR, THER)
-# die letzten 2 Jahre aus den entpackten .txt-Dateien ein,
-# saeubert die Spaltennamen und speichert pro Entitaet eine
-# kombinierte Tabelle als .rds in app_data/.
-#
-# Die App laedt dann beim Start nur diese 7 Dateien (schnell).
-#
-# Voraussetzung:
-#   - Daten herunterladen.R wurde ausgefuehrt
-#   - In Organisation_processed_data/<QUARTAL>/ liegen
-#     DEMO.txt, DRUG.txt, INDI.txt, OUTC.txt, REAC.txt,
-#     RPSR.txt, THER.txt
-# =============================================================
+# Bereitet die FAERS-Daten fuer die Shiny-App vor und speichert sie als .fst.
 
 library(data.table)
 library(here)
-library(fst)   # schnelles Speicherformat (~10-20x schneller als RDS)
+library(fst)
 
 find_faers_file <- function(q_folder, entity) {
 
@@ -42,9 +27,7 @@ find_faers_file <- function(q_folder, entity) {
 }
 
 
-# -------------------------------------------------------------
-# 1) Pfade und Konfiguration
-# -------------------------------------------------------------
+# Pfade und Konfiguration
 raw_ordner <- here("Organisation_Rohdaten", "faers_data")
 app_data_ordner  <- here("app_data")
 
@@ -56,26 +39,21 @@ N_QUARTALE <- 8
 # Welche Entitaeten verarbeiten
 entitaeten <- c("DEMO", "DRUG", "INDI", "OUTC", "REAC", "RPSR", "THER")
 
-# -------------------------------------------------------------
-# 2) Welche Quartale verarbeiten?
-# -------------------------------------------------------------
+
+# Quartal-Ordner sortieren und die letzten N_QUARTALE nehmen
 alle_q_ordner <- list.dirs(raw_ordner,
                            recursive = FALSE,
                            full.names = TRUE)
 
-# Nach Name sortieren (alphabetisch = chronologisch, weil "2024Q2" < "2024Q3")
 alle_q_ordner <- alle_q_ordner[order(basename(alle_q_ordner))]
-
-# Letzte N_QUARTALE nehmen
 letzte_q_ordner <- tail(alle_q_ordner, N_QUARTALE)
 
 message("Verarbeite ", length(letzte_q_ordner), " Quartale:")
 message("  Erstes: ", basename(letzte_q_ordner[1]))
 message("  Letztes: ", basename(letzte_q_ordner[length(letzte_q_ordner)]))
 
-# -------------------------------------------------------------
-# 3) Einlese-Funktion (mit fread + Spaltennamen-Saeuberung)
-# -------------------------------------------------------------
+
+# Einlese-Funktion: ein Quartal, eine Entitaet
 read_entity_quartal <- function(entity, q_ordner) {
 
   q_name <- basename(q_ordner)
@@ -105,6 +83,7 @@ read_entity_quartal <- function(entity, q_ordner) {
 
   if (is.null(dt) || nrow(dt) == 0) return(NULL)
 
+  # Spaltennamen lowercase, BOM-Reste entfernen
   setnames(dt, names(dt),
            tolower(sub("^[^A-Za-z0-9_]+", "", names(dt))))
 
@@ -114,13 +93,11 @@ read_entity_quartal <- function(entity, q_ordner) {
   dt
 }
 
-# -------------------------------------------------------------
-# 4) Pro Entitaet: alle Quartale einlesen + zusammenfuegen
-# -------------------------------------------------------------
+
+# Pro Entitaet alle Quartale einlesen und zusammenfuegen
 read_entity_alle <- function(entity) {
   message("\n>>> ", entity)
 
-  # Pro Quartal einlesen
   alle_dt <- vector("list", length(letzte_q_ordner))
   for (i in seq_along(letzte_q_ordner)) {
     q_ordner <- letzte_q_ordner[i]
@@ -129,7 +106,6 @@ read_entity_alle <- function(entity) {
     alle_dt[[i]] <- read_entity_quartal(entity, q_ordner)
   }
 
-  # NULL-Eintraege rausfiltern (z.B. wenn .txt fehlt)
   alle_dt <- Filter(Negate(is.null), alle_dt)
 
   if (length(alle_dt) == 0) {
@@ -137,7 +113,7 @@ read_entity_alle <- function(entity) {
     return(NULL)
   }
 
-  # Zusammenfuegen (fill = TRUE, falls Spalten unterschiedlich)
+  # fill = TRUE faengt unterschiedliche Spalten zwischen Quartalen ab
   combined <- rbindlist(alle_dt, fill = TRUE, use.names = TRUE)
 
   message("  -> ", format(nrow(combined), big.mark = "'"),
@@ -146,9 +122,8 @@ read_entity_alle <- function(entity) {
   combined
 }
 
-# -------------------------------------------------------------
-# 5) Schleife ueber alle Entitaeten
-# -------------------------------------------------------------
+
+# Schleife ueber alle Entitaeten
 for (entity in entitaeten) {
 
   dt <- read_entity_alle(entity)
@@ -161,15 +136,13 @@ for (entity in entitaeten) {
   message("  -> Gespeichert: ", basename(out_pfad),
           " (", round(file.info(out_pfad)$size / 1024^2, 1), " MB)")
 
-  # Speicher freigeben fuer naechste Entitaet
   rm(dt)
   gc(verbose = FALSE)
 }
 
-# -------------------------------------------------------------
-# 6) Zusammenfassung
-# -------------------------------------------------------------
-message("\n========== FERTIG ==========")
+
+# Zusammenfassung
+message("\nFertig.")
 message("App-Daten gespeichert in: ", app_data_ordner)
 
 dateien <- list.files(app_data_ordner, pattern = "\\.fst$", full.names = TRUE)
