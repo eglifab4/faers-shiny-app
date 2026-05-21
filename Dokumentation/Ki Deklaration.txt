@@ -1,0 +1,3 @@
+KI Deklaration:
+In dieser Arbeit wurde KI als Hilfsmittel zur Beschleunigung und Kontrolle der Arbeit verwendet.
+KI wurde für die allgemeine Dokumentation (Rechtschreibfehler, Struktur) sowie zur Verbesserung des Codes benutzt.
